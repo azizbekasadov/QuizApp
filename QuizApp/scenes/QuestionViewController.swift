@@ -10,19 +10,30 @@ import UIKit
 
 typealias Question = String
 
-class QuestionViewController: UIViewController {
-    @IBOutlet weak var tableView: UITableView!
+class QuestionViewController: UIViewController, UITableViewDataSource {
+    private(set) var tableView: UITableView = {
+        let tv = UITableView(frame: .zero, style: .plain)
+        tv.register(UITableViewCell.self, forCellReuseIdentifier: QuestionViewController.reuseIdentifier)
+        tv.translatesAutoresizingMaskIntoConstraints = false
+        return tv
+    }()
     
     private(set) var headerText: String = ""
     private var question: Question = ""
-    private var options: [String] = []
+    private var options = [String]()
+    private var selection: (([String]) -> Void)? = nil
     
-    convenience init(question: Question, options: [String]) {
-        self.init()
+    convenience init(
+        question: Question,
+        options: [String],
+        selection: @escaping ([String]) -> Void
+    ) {
+        self.init(nibName: nil, bundle: nil)
         
         self.question = question
-        self.headerText = question
         self.options = options
+        self.headerText = question
+        self.selection = selection
     }
     
     override func viewDidLoad() {
@@ -31,16 +42,34 @@ class QuestionViewController: UIViewController {
         navigationItem.title = question
         navigationItem.titleView?.accessibilityIdentifier = headerText
         
-        setupTableView()
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.reloadData()
     }
     
-    private func setupTableView() {
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: QuestionViewController.cellid)
-        tableView.dataSource = self
+    override func loadView() {
+        super.loadView()
+        
+        view.addSubview(tableView)
+        
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
-}
-
-extension QuestionViewController: UITableViewDataSource {
+    
+    private func dequeueCell(
+        _ tableView: UITableView
+    ) -> UITableViewCell {
+        if let cell = tableView.dequeueReusableCell(withIdentifier: QuestionViewController.reuseIdentifier) {
+            return cell
+        }
+        
+        return UITableViewCell(style: .default, reuseIdentifier: QuestionViewController.reuseIdentifier)
+    }
+    
     func tableView(
         _ tableView: UITableView,
         numberOfRowsInSection section: Int
@@ -52,17 +81,36 @@ extension QuestionViewController: UITableViewDataSource {
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(
-            withIdentifier: QuestionViewController.cellid,
-            for: indexPath
-        )
+        let cell = dequeueCell(tableView)
         cell.textLabel?.text = options[indexPath.row]
         return cell
+    }
+}
+
+extension QuestionViewController {
+    
+}
+
+extension QuestionViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        selection?(selectedOptions(in: tableView))
+    }
+    
+    func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+        if tableView.allowsMultipleSelection {
+            selection?(selectedOptions(in: tableView))
+        }
+    }
+    
+    func selectedOptions(in tableView: UITableView) -> [String] {
+        guard let indexPathsForSelectedRows = tableView.indexPathsForSelectedRows else { return [] }
+        
+        return indexPathsForSelectedRows.map { options[$0.row] }
     }
 }
 
 // NOTE: Static dispatching trick
 extension QuestionViewController {
     static let headerTitle: String = "header-title"
-    static let cellid: String = "cellid"
+    static let reuseIdentifier: String = "cellid"
 }

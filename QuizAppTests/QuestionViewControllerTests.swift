@@ -10,41 +10,128 @@ import XCTest
 
 @testable import QuizApp
 
-
+@MainActor
 final class QuestionViewControllerTests: XCTestCase {
     func test_viewDidLoad_rendersHeaderText() {
-        let sut = QuestionViewController(question: "Q1", options: [])
-        _ = sut.view // to layout all subviews
-        
-        XCTAssertEqual(sut.headerText, "Q1")
+        XCTAssertEqual(makeSUT(for: "Q1", with: []).headerText, "Q1")
     }
     
-    func test_viewDidLoad_withNoOptions_rendersZeroOptionsInSectionZero() {
-        let sut = QuestionViewController(question: "Q1", options: [])
-        _ = sut.view // to layout all subviews
-        
-        XCTAssertEqual(sut.tableView.numberOfRows(inSection: 0), 0)
+    func test_viewDidLoad_rendersOptions() {
+        XCTAssertEqual(makeSUT(with: []).tableView.numberOfRows(inSection: 0), 0)
+        XCTAssertEqual(makeSUT(with: ["A1"]).tableView.numberOfRows(inSection: 0), 1)
+        XCTAssertEqual(makeSUT(with: ["A1", "A2"]).tableView.numberOfRows(inSection: 0), 2)
     }
     
-    func test_viewDidLoad_withOneOptions_rendersOneOptionsInSectionZero() {
-        let sut = QuestionViewController(question: "Q1", options: ["A1"])
-        _ = sut.view // to layout all subviews
-        
-        XCTAssertEqual(sut.tableView.numberOfRows(inSection: 0), 1)
+    func test_viewDidLoad_withOneOptions_rendersOptionsCellTexts() {
+        XCTAssertEqual(makeSUT(with: ["A1", "A2"]).tableView.title(at: 0), "A1")
+        XCTAssertEqual(makeSUT(with: ["A1", "A2"]).tableView.title(at: 1), "A2")
     }
     
-    func test_viewDidLoad_withOneOptions_rendersOneOptionCell() {
-        let option = "A1"
+    func test_optionSelected_withSingleSelection_notifiesDelegateWhenSelectionChanges() {
+        var receivedAnswer: [String] = []
+        let sut = makeSUT(with: ["A1", "A2"]) {
+            receivedAnswer = $0
+        }
         
-        let sut = QuestionViewController(question: "Q1", options: [option])
-        _ = sut.view // to layout all subviews
+        sut.tableView.select(row: 0)
+        XCTAssertEqual(receivedAnswer, ["A1"])
+        
+        sut.tableView.select(row: 1)
+        XCTAssertEqual(receivedAnswer, ["A2"])
+    }
     
-        let indexPath = IndexPath.zero
-        let cell = sut.tableView.dataSource?.tableView(
-            sut.tableView,
-            cellForRowAt: indexPath
+    func test_optionDeselected_withSingleSelection_doesNotNotifyDelegateWithEmptySelection() {
+        var callbackCount = 0
+        
+        let sut = makeSUT(with: ["A1", "A2"]) { _ in
+            callbackCount += 1
+        }
+        
+        sut.tableView.select(row: 0)
+        XCTAssertEqual(callbackCount, 1)
+        
+        sut.tableView.deselect(row: 0)
+        XCTAssertEqual(callbackCount, 1)
+    }
+    
+    func test_optionDeselected_withMultipleSelection_notifiesDelegateWithEmptySelection() {
+        var callbackCount = 0
+        
+        let sut = makeSUT(with: ["A1", "A2"]) { _ in
+            callbackCount += 1
+        }
+        sut.tableView.allowsMultipleSelection = true
+        sut.tableView.select(row: 0)
+        XCTAssertEqual(callbackCount, 1)
+        
+        sut.tableView.deselect(row: 0)
+        XCTAssertEqual(callbackCount, 2)
+    }
+    
+    func test_optionSelected_withMultipleSelectionEnabled_notifiesDelegateSelection() {
+        var receivedAnswer: [String] = []
+        let sut = makeSUT(with: ["A1", "A2"]) {
+            receivedAnswer = $0
+        }
+        
+        sut.tableView.allowsMultipleSelection = true
+        sut.tableView.select(row: 0)
+        XCTAssertEqual(receivedAnswer, ["A1"])
+        
+        sut.tableView.select(row: 1)
+        XCTAssertEqual(receivedAnswer, ["A1", "A2"])
+    }
+    
+    func test_optionDeselected_withMultipleSelectionEnabled_notifiesDelegate() {
+        var receivedAnswer: [String] = []
+        let sut = makeSUT(with: ["A1", "A2"]) {
+            receivedAnswer = $0
+        }
+        
+        sut.tableView.allowsMultipleSelection = true
+        sut.tableView.select(row: 0)
+        XCTAssertEqual(receivedAnswer, ["A1"])
+        
+        sut.tableView.deselect(row: 0)
+        XCTAssertEqual(receivedAnswer, [])
+    }
+    
+    @MainActor
+    func makeSUT(
+        for question: String = "",
+        with options: [String] = [],
+        selection: @escaping (([String]) -> Void) = { _ in }
+    ) -> QuestionViewController {
+        let sut = QuestionViewController(
+            question: question,
+            options: options,
+            selection: selection
         )
+        sut.loadViewIfNeeded()
+        return sut
+    }
+}
+
+private extension UITableView {
+    func cell(at row: Int) -> UITableViewCell? {
+        dataSource?.tableView(self, cellForRowAt: IndexPath(row: row, section: 0))
+    }
+    
+    func title(at row: Int) -> String? {
+        let cell = cell(at: row)
         
-        XCTAssertEqual(cell?.textLabel?.text, option)
+        return cell?.textLabel?.text
+    }
+    
+    func select(row: Int) {
+        let indexPath = IndexPath(row: row, section: 0)
+        selectRow(at: indexPath, animated: false, scrollPosition: .none)
+        delegate?.tableView?(self, didSelectRowAt: indexPath)
+    }
+    
+    func deselect(row: Int) {
+        let indexPath = IndexPath(row: row, section: 0)
+        deselectRow(at: indexPath, animated: false)
+        delegate?.tableView?(self, didDeselectRowAt: indexPath)
     }
 }
