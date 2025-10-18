@@ -42,6 +42,7 @@ class QuestionViewController: UIViewController, UITableViewDataSource {
         navigationItem.title = question
         navigationItem.titleView?.accessibilityIdentifier = headerText
         
+        tableView.register(QuestionCell.self, forCellReuseIdentifier: QuestionViewController.reuseIdentifier)
         tableView.dataSource = self
         tableView.delegate = self
         tableView.reloadData()
